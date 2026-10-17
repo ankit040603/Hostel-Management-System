@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hostel Management System</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --danger: #dc2626;
+            --success: #16a34a;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --border: #e2e8f0;
+            --text: #0f172a;
+            --muted: #64748b;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+        body { background: var(--bg); color: var(--text); padding-bottom: 40px; }
+        header {
+            background: #1e293b; color: #fff; padding: 14px 24px;
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+        }
+        header h1 { font-size: 1.25rem; }
+        .auth-bar { display: flex; gap: 8px; align-items: center; font-size: 0.85rem; }
+        .auth-bar select, .auth-bar button {
+            padding: 6px 10px; border-radius: 6px; border: 1px solid #475569; background: #334155; color: #fff;
+        }
+        .container { max-width: 1200px; margin: 20px auto; padding: 0 16px; }
+        .alert {
+            padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; display: none;
+            font-size: 0.9rem; font-weight: 500;
+        }
+        .alert.error { background: #fee2e2; color: #991b1b; border: 1px solid #f87171; display: block; }
+        .alert.ok { background: #dcfce7; color: #166534; border: 1px solid #4ade80; display: block; }
+
+        /* Dashboard Cards */
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px;
+        }
+        .stat-card {
+            background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px;
+        }
+        .stat-card .label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; }
+        .stat-card .val { font-size: 1.5rem; font-weight: 700; margin-top: 4px; }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+        .tab-btn {
+            padding: 9px 16px; border: 1px solid var(--border); background: var(--card);
+            border-radius: 8px; cursor: pointer; font-weight: 600; color: var(--muted);
+        }
+        .tab-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+        .panel { display: none; }
+        .panel.active { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
+        @media (max-width: 850px) { .panel.active { grid-template-columns: 1fr; } }
+
+        .card {
+            background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; overflow-x: auto;
+        }
+        .card h2 { font-size: 1rem; margin-bottom: 12px; }
+        form { display: flex; flex-direction: column; gap: 10px; }
+        input, select, textarea {
+            width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem;
+        }
+        button.btn {
+            padding: 9px 14px; border: none; border-radius: 6px; cursor: pointer;
+            font-weight: 600; background: var(--primary); color: #fff;
+        }
+        button.btn:hover { background: var(--primary-hover); }
+        button.btn-sm { padding: 4px 8px; font-size: 0.78rem; border-radius: 4px; border: none; cursor: pointer; color: #fff; }
+        .btn-danger { background: var(--danger); }
+        .btn-success { background: var(--success); }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+        th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--border); }
+        th { color: var(--muted); font-weight: 600; }
+        .badge {
+            padding: 2px 7px; border-radius: 99px; font-size: 0.75rem; font-weight: 600; background: #e2e8f0;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Hostel Management System</h1>
+    <div class="auth-bar">
+        <span>User:</span>
+        <select id="roleSelect" onchange="loadAll()">
+            <option value="admin:admin123">admin (ADMIN - Full Access)</option>
+            <option value="warden:warden123">warden (WARDEN - No Delete)</option>
+        </select>
+        <button onclick="loadAll()">Refresh</button>
+        <a href="/swagger-ui.html" style="color:#93c5fd;text-decoration:none;">Swagger</a>
+    </div>
+</header>
+
+<div class="container">
+    <div id="alertBox" class="alert"></div>
+
+    <!-- Dashboard Metrics -->
+    <div class="stats-grid" id="dashboardGrid"></div>
+
+    <!-- Navigation Tabs -->
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('rooms', this)">Rooms</button>
+        <button class="tab-btn" onclick="switchTab('students', this)">Students</button>
+        <button class="tab-btn" onclick="switchTab('allocations', this)">Allocations</button>
+        <button class="tab-btn" onclick="switchTab('payments', this)">Payments</button>
+        <button class="tab-btn" onclick="switchTab('complaints', this)">Complaints</button>
+    </div>
+
+    <!-- ROOMS -->
+    <div id="tab-rooms" class="panel active">
+        <div class="card">
+            <h2>Add Room</h2>
+            <form onsubmit="createRoom(event)">
+                <input id="r_num" placeholder="Room Number (e.g. A-103)" required />
+                <input id="r_block" placeholder="Block (e.g. A)" />
+                <input id="r_floor" type="number" min="0" placeholder="Floor (0+)" required />
+                <input id="r_cap" type="number" min="1" placeholder="Capacity (1+)" required />
+                <select id="r_type">
+                    <option value="SINGLE">SINGLE</option>
+                    <option value="DOUBLE">DOUBLE</option>
+                    <option value="TRIPLE">TRIPLE</option>
+                    <option value="DORMITORY">DORMITORY</option>
+                </select>
+                <input id="r_rent" type="number" step="0.01" min="0" placeholder="Monthly Rent" required />
+                <button class="btn" type="submit">Save Room</button>
+            </form>
+        </div>
+        <div class="card">
+            <h2>All Rooms</h2>
+            <table>
+                <thead>
+                <tr><th>ID</th><th>Room</th><th>Block/Floor</th><th>Type</th><th>Rent</th><th>Occupancy</th><th>Action</th></tr>
+                </thead>
+                <tbody id="roomsTable"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- STUDENTS -->
+    <div id="tab-students" class="panel">
+        <div class="card">
+            <h2>Register Student</h2>
+            <form onsubmit="createStudent(event)">
+                <input id="s_roll" placeholder="Student ID / Roll No" required />
+                <input id="s_name" placeholder="Full Name" required />
+                <input id="s_email" type="email" placeholder="Email" required />
+                <input id="s_phone" placeholder="Phone (7-15 digits)" required />
+                <select id="s_gender">
+                    <option value="MALE">MALE</option>
+                    <option value="FEMALE">FEMALE</option>
+                    <option value="OTHER">OTHER</option>
+                </select>
+                <input id="s_course" placeholder="Course (e.g. B.Tech CSE)" />
+                <button class="btn" type="submit">Add Student</button>
+            </form>
+        </div>
+        <div class="card">
+            <h2>Registered Students</h2>
+            <table>
+                <thead>
+                <tr><th>ID</th><th>Roll No</th><th>Name</th><th>Email</th><th>Phone</th><th>Course</th><th>Action</th></tr>
+                </thead>
+                <tbody id="studentsTable"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ALLOCATIONS -->
+    <div id="tab-allocations" class="panel">
+        <div class="card">
+            <h2>Allocate Room</h2>
+            <form onsubmit="allocateRoom(event)">
+                <select id="a_student" required></select>
+                <select id="a_room" required></select>
+                <button class="btn" type="submit">Allocate</button>
+            </form>
+        </div>
+        <div class="card">
+            <h2>Active Allocations</h2>
+            <table>
+                <thead>
+                <tr><th>ID</th><th>Student</th><th>Room</th><th>Check-In</th><th>Status</th><th>Action</th></tr>
+                </thead>
+                <tbody id="allocationsTable"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- PAYMENTS -->
+    <div id="tab-payments" class="panel">
+        <div class="card">
+            <h2>Record Fee Payment</h2>
+            <form onsubmit="recordPayment(event)">
+                <select id="p_student" required></select>
+                <input id="p_amount" type="number" step="0.01" min="0.01" placeholder="Amount" required />
+                <input id="p_month" placeholder="Billing Month (yyyy-MM)" value="2026-10" required />
+                <select id="p_method">
+                    <option value="UPI">UPI</option>
+                    <option value="CASH">CASH</option>
+                    <option value="CARD">CARD</option>
+                    <option value="BANK_TRANSFER">BANK_TRANSFER</option>
+                </select>
+                <input id="p_ref" placeholder="Reference / TXN ID" />
+                <button class="btn" type="submit">Record Payment</button>
+            </form>
+        </div>
+        <div class="card">
+            <h2>Payment History</h2>
+            <table>
+                <thead>
+                <tr><th>ID</th><th>Student</th><th>Month</th><th>Amount</th><th>Method</th><th>Paid On</th></tr>
+                </thead>
+                <tbody id="paymentsTable"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- COMPLAINTS -->
+    <div id="tab-complaints" class="panel">
+        <div class="card">
+            <h2>Log Complaint</h2>
+            <form onsubmit="createComplaint(event)">
+                <select id="c_student" required></select>
+                <input id="c_title" placeholder="Issue Title" required />
+                <textarea id="c_desc" rows="3" placeholder="Description" required></textarea>
+                <button class="btn" type="submit">Submit Complaint</button>
+            </form>
+        </div>
+        <div class="card">
+            <h2>Complaints</h2>
+            <table>
+                <thead>
+                <tr><th>ID</th><th>Student</th><th>Title</th><th>Status</th><th>Action</th></tr>
+                </thead>
+                <tbody id="complaintsTable"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    function authHeader() {
+        const creds = document.getElementById('roleSelect').value;
+        return {
+            'Authorization': 'Basic ' + btoa(creds),
+            'Content-Type': 'application/json'
+        };
+    }
+
+    function notify(msg, isError = false) {
+        const box = document.getElementById('alertBox');
+        box.textContent = msg;
+        box.className = 'alert ' + (isError ? 'error' : 'ok');
+        setTimeout(() => { box.className = 'alert'; }, 4000);
+    }
+
+    async function api(url, options = {}) {
+        const res = await fetch(url, { ...options, headers: authHeader() });
+        if (res.status === 204) return null;
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            const details = data.errors ? ' (' + JSON.stringify(data.errors) + ')' : '';
+            throw new Error((data.message || ('HTTP ' + res.status)) + details);
+        }
+        return data;
+    }
+
+    function switchTab(name, btn) {
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('tab-' + name).classList.add('active');
+        btn.classList.add('active');
+    }
+
+    async function loadAll() {
+        try {
+            const [dash, rooms, students, allocations, payments, complaints] = await Promise.all([
+                api('/api/dashboard'),
+                api('/api/rooms'),
+                api('/api/students'),
+                api('/api/allocations?activeOnly=true'),
+                api('/api/payments'),
+                api('/api/complaints')
+            ]);
+
+            // Dashboard
+            document.getElementById('dashboardGrid').innerHTML = `
+        <div class="stat-card"><div class="label">Total Rooms</div><div class="val">${dash.totalRooms}</div></div>
+        <div class="stat-card"><div class="label">Total Students</div><div class="val">${dash.totalStudents}</div></div>
+        <div class="stat-card"><div class="label">Beds (Occ / Total)</div><div class="val">${dash.occupiedBeds} / ${dash.totalBeds}</div></div>
+        <div class="stat-card"><div class="label">Occupancy</div><div class="val">${dash.occupancyPercent}%</div></div>
+        <div class="stat-card"><div class="label">Open Complaints</div><div class="val">${dash.openComplaints}</div></div>
+        <div class="stat-card"><div class="label">Collection (${dash.month})</div><div class="val">₹${dash.collectionThisMonth}</div></div>
+      `;
+
+            // Rooms
+            document.getElementById('roomsTable').innerHTML = rooms.map(r => `
+        <tr>
+          <td>${r.id}</td>
+          <td><strong>${r.roomNumber}</strong></td>
+          <td>${r.blockName || '-'} / Fl ${r.floor}</td>
+          <td><span class="badge">${r.type}</span></td>
+          <td>₹${r.monthlyRent}</td>
+          <td>${r.occupied} / ${r.capacity} (${r.available} free)</td>
+          <td><button class="btn-sm btn-danger" onclick="del('/api/rooms/${r.id}')">Delete</button></td>
+        </tr>
+      `).join('');
+
+            // Students
+            document.getElementById('studentsTable').innerHTML = students.map(s => `
+        <tr>
+          <td>${s.id}</td>
+          <td>${s.studentId}</td>
+          <td><strong>${s.name}</strong></td>
+          <td>${s.email}</td>
+          <td>${s.phone || '-'}</td>
+          <td>${s.course || '-'}</td>
+          <td><button class="btn-sm btn-danger" onclick="del('/api/students/${s.id}')">Delete</button></td>
+        </tr>
+      `).join('');
+
+            // Populate Select Dropdowns
+            const studentOpts = students.map(s => `<option value="${s.id}">${s.name} (${s.studentId})</option>`).join('');
+            ['a_student', 'p_student', 'c_student'].forEach(id => document.getElementById(id).innerHTML = studentOpts);
+
+            document.getElementById('a_room').innerHTML = rooms
+                .filter(r => r.available > 0)
+                .map(r => `<option value="${r.id}">${r.roomNumber} (${r.available} bed free)</option>`).join('');
+
+            // Allocations
+            document.getElementById('allocationsTable').innerHTML = allocations.map(a => `
+        <tr>
+          <td>${a.id}</td>
+          <td>${a.student.name} (${a.student.studentId})</td>
+          <td>${a.room.roomNumber}</td>
+          <td>${a.checkInDate}</td>
+          <td><span class="badge">${a.active ? 'ACTIVE' : 'CLOSED'}</span></td>
+          <td>${a.active ? `<button class="btn-sm btn-danger" onclick="checkout(${a.id})">Check Out</button>` : ''}</td>
+        </tr>
+      `).join('');
+
+            // Payments
+            document.getElementById('paymentsTable').innerHTML = payments.map(p => `
+        <tr>
+          <td>${p.id}</td>
+          <td>${p.student.name}</td>
+          <td>${p.forMonth}</td>
+          <td>₹${p.amount}</td>
+          <td><span class="badge">${p.method}</span></td>
+          <td>${p.paidOn}</td>
+        </tr>
+      `).join('');
+
+            // Complaints
+            document.getElementById('complaintsTable').innerHTML = complaints.map(c => `
+        <tr>
+          <td>${c.id}</td>
+          <td>${c.student.name}</td>
+          <td><strong>${c.title}</strong><br><small>${c.description}</small></td>
+          <td><span class="badge">${c.status}</span></td>
+          <td>
+            ${c.status !== 'RESOLVED' ? `<button class="btn-sm btn-success" onclick="resolveComplaint(${c.id})">Resolve</button>` : 'Done'}
+          </td>
+        </tr>
+      `).join('');
+        } catch (e) {
+            notify(e.message, true);
+        }
+    }
+
+    async function createRoom(e) {
+        e.preventDefault();
+        try {
+            await api('/api/rooms', {
+                method: 'POST',
+                body: JSON.stringify({
+                    roomNumber: r_num.value, blockName: r_block.value,
+                    floor: +r_floor.value, capacity: +r_cap.value,
+                    type: r_type.value, monthlyRent: +r_rent.value
+                })
+            });
+            e.target.reset(); notify('Room added'); loadAll();
+        } catch (err) { notify(err.message, true); }
+    }
+
+    async function createStudent(e) {
+        e.preventDefault();
+        try {
+            await api('/api/students', {
+                method: 'POST',
+                body: JSON.stringify({
+                    studentId: s_roll.value, name: s_name.value, email: s_email.value,
+                    phone: s_phone.value, gender: s_gender.value, course: s_course.value
+                })
+            });
+            e.target.reset(); notify('Student registered'); loadAll();
+        } catch (err) { notify(err.message, true); }
+    }
+
+    async function allocateRoom(e) {
+        e.preventDefault();
+        try {
+            await api('/api/allocations', {
+                method: 'POST',
+                body: JSON.stringify({ studentId: +a_student.value, roomId: +a_room.value })
+            });
+            notify('Room allocated'); loadAll();
+        } catch (err) { notify(err.message, true); }
+    }
+
+    async function checkout(id) {
+        try {
+            await api(`/api/allocations/${id}/checkout`, { method: 'POST' });
+            notify('Checked out'); loadAll();
+        } catch (err) { notify(err.message, true); }
+    }
+
+    async function recordPayment(e) {
+        e.preventDefault();
+        try {
+            await api('/api/payments', {
+                method: 'POST',
+                body: JSON.stringify({
+                    studentId: +p_student.value, amount: +p_amount.value,
+                    forMonth: p_month.value, method: p_method.value, reference: p_ref.value
+                })
+            });
+            notify('Payment recorded'); loadAll();
+        } catch (err) { notify(err.message, true); }
+    }
+
+    async function createComplaint(e) {
+        e.preventDefault();
+        try {
+            await api('/api/complaints', {
+                method: 'POST',
+                body: JSON.stringify({ studentId: +c_student.value, title: c_title.value, description: c_desc.value })
+            });
+            e.target.reset(); notify('Complaint logged'); loadAll();
+        } catch (err) { notify(err.message, true); }
+    }
+
+    async function resolveComplaint(id) {
+        try {
+            await api(`/api/complaints/${id}/status?status=RESOLVED`, { method: 'PATCH' });
+            notify('Complaint resolved'); loadAll();
+        } catch (err) { notify(err.message, true); }
+    }
+
+    async function del(url) {
+        try {
+            await api(url, { method: 'DELETE' });
+            notify('Deleted successfully'); loadAll();
+        } catch (err) { notify(err.message, true); }
+    }
+
+    loadAll();
+</script>
+</body>
+</html>
